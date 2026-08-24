@@ -184,9 +184,9 @@ jobs:
           echo "${HDR}"
           echo "${HDR}" | grep -Eq 'command line args: *$' \
             || { echo "::error::recovery cmdline must be EMPTY (Lenovo bootloader falls back to fastboot otherwise)"; exit 1; }
-          echo "${HDR}" | grep -Eq 'kernel_size:0' \
+          echo "${HDR}" | grep -Eq 'kernel_size: *0' \
             || { echo "::error::recovery image must NOT contain a kernel (GKI: bootloader loads it from boot)"; exit 1; }
-          echo "${HDR}" | grep -Eq 'os version:99\.0\.0' \
+          echo "${HDR}" | grep -Eq 'os version: *99\.0\.0' \
             || { echo "::error::os_version must be 99.0.0 to match stock/TB321FU"; exit 1; }
           echo "OK: recovery image header matches stock layout (empty cmdline, no kernel, os 99.0.0)"
 
