@@ -84,10 +84,15 @@
 ## 四、待办 / 当前状态
 
 - [x] 设备树 + CI 全链路修复(16 轮)
-- [ ] 构建产出 recovery.img 并发布 Release
+- [x] 无法启动根因定位与修复(2026-08-15, f924b00 起)
+  - 实测 20260814 发布镜像 header:`command line args: buildvariant=eng`(kernel_size=0、os_version=99.0.0 均正确)
+  - Lenovo UEFI bootloader(与 TB321FU 同族)要求 recovery header cmdline 为空,非空 → 拒绝启动、退回 fastboot
+  - `TARGET_PREBUILT_KERNEL := /dev/null` 只能清空 kernel,清不掉 cmdline(build/make 在 `INTERNAL_KERNEL_CMDLINE` 无条件追加 `buildvariant=$(TARGET_BUILD_VARIANT)`)
+  - 修复:`BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true` 同时移除 kernel 与 `--cmdline`(core/Makefile 中 `INTERNAL_RECOVERYIMAGE_ARGS` 的逻辑),镜像布局对齐 stock recovery_a.img
+  - CI 增加 header 自检步骤(空 cmdline / kernel_size=0 / os_version=99.0.0),防止回归
+- [ ] 用修复后的 commit 重新构建并发布 Release(最新 Release 20260814 仍为坏镜像)
 - [ ] 刷机实测:fastboot flash recovery_a/b recovery.img
 - [ ] 验证触摸/解密/ADB 等功能
-- [ ] 未决点:recovery.img 是否含内核(polygraphene 联想平板方案用 `BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true`,待实机验证)
 
 ## 五、参考仓库
 

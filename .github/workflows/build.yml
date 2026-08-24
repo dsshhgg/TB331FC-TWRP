@@ -168,6 +168,28 @@ jobs:
           echo "MD5_IMG=$(md5sum ${IMG} | cut -d ' ' -f 1)" >> $GITHUB_ENV
           ls -la ${IMG}
 
+      # Regression guard: the Lenovo UEFI bootloader (same family as the
+      # working TB321FU) refuses to boot recovery images whose header cmdline
+      # is non-empty (stock recovery_a.img has empty cmdline + no kernel) and
+      # falls back to fastboot. TARGET_PREBUILT_KERNEL=/dev/null only empties
+      # the kernel; build/make appends "buildvariant=eng" to the cmdline
+      # unless BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE is set. Verify the
+      # final image actually matches the stock layout before releasing.
+      - name: Verify recovery image header (empty cmdline / no kernel / os 99)
+        run: |
+          cd workspace
+          IMG=out/target/product/${{ env.DEVICE_NAME }}/${{ env.FOUND }}
+          rm -rf /tmp/verify_header
+          HDR=$(unpack_bootimg --boot_img "${IMG}" --out /tmp/verify_header)
+          echo "${HDR}"
+          echo "${HDR}" | grep -Eq 'command line args: *$' \
+            || { echo "::error::recovery cmdline must be EMPTY (Lenovo bootloader falls back to fastboot otherwise)"; exit 1; }
+          echo "${HDR}" | grep -Eq 'kernel_size:0' \
+            || { echo "::error::recovery image must NOT contain a kernel (GKI: bootloader loads it from boot)"; exit 1; }
+          echo "${HDR}" | grep -Eq 'os version:99\.0\.0' \
+            || { echo "::error::os_version must be 99.0.0 to match stock/TB321FU"; exit 1; }
+          echo "OK: recovery image header matches stock layout (empty cmdline, no kernel, os 99.0.0)"
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
