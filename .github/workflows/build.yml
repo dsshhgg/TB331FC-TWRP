@@ -196,15 +196,27 @@ jobs:
             exit 1
           fi
           # Sanity: the shipped vbmeta MUST be flags=3 (AVB verification
-          # disabled). Parse AvbVBMetaImageHeader directly (flags is u32 BE
-          # @ offset 120, after magic+versions+block sizes+algorithm+
-          # hash/sig/pubkey/pkmeta/descriptors+rollback_index) to avoid an
-          # avbtool runtime dependency.
-          if ! python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(160); sys.exit(0 if (d[:4]==b'AVB0' and struct.unpack('>I',d[120:124])[0]==3) else 1)" "${VBMETA}"; then
-            echo "::error::vbmeta is not flags-3 (AVB verification not disabled) - refusing to release a non-booting image"
+          # disabled) AND signed with the AOSP testkey whose pubkey sha1
+          # matches the stock vbmeta exactly (2597c218...) - otherwise the
+          # bootloader won't trust it. Parse AvbVBMetaImageHeader directly
+          # (header 256B; flags u32 BE @120; auth block follows header, then
+          # aux block with the public key @pk_offset) to avoid an avbtool
+          # runtime dependency.
+          if ! python3 -c "
+import struct, hashlib, sys
+d = open(sys.argv[1], 'rb').read()
+hdr = d[:256]
+auth_bs, aux_bs = struct.unpack('>QQ', hdr[12:28])
+pk_off, pk_size = struct.unpack('>QQ', hdr[64:80])
+aux = d[256+auth_bs : 256+auth_bs+aux_bs]
+flags = struct.unpack('>I', hdr[120:124])[0]
+pk_sha1 = hashlib.sha1(aux[pk_off:pk_off+pk_size]).hexdigest()
+sys.exit(0 if (hdr[:4]==b'AVB0' and flags==3 and pk_sha1=='2597c218aae470a130f61162feaae70afd97f011') else 1)
+" "${VBMETA}"; then
+            echo "::error::vbmeta not flags=3 AND testkey-signed (pubkey 2597c218...) - refusing to release a non-booting image"
             exit 1
           fi
-          echo "OK: vbmeta flags=3 (AVB verification disabled)"
+          echo "OK: vbmeta flags=3 (AVB verification disabled), testkey pubkey 2597c218 matched"
           echo "MD5_VBMETA=$(md5sum ${VBMETA} | cut -d ' ' -f 1)" >> $GITHUB_ENV
           ls -la ${VBMETA}
 
