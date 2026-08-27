@@ -143,6 +143,15 @@ jobs:
             echo "recovery.img missing, trying bootimage"
             mka bootimage -j${JOB_COUNT} 2>&1 | tee -a /tmp/build.log
           fi
+          # Build the standalone vbmeta partition image. BOARD_AVB_ENABLE +
+          # --flags 3 yields an AVB-verification-DISABLED, testkey-signed
+          # vbmeta (the device's stock vbmeta is testkey-signed too, pubkey
+          # sha1 2597c218...). The stock vbmeta pins a Hash descriptor on the
+          # recovery partition (stock digest) that a custom TWRP recovery can
+          # never satisfy -> bootloader rejects it and falls back to fastboot.
+          # Flashing this flags-3 vbmeta disables that enforcement so the
+          # custom recovery boots. Shipped in the release; see flash steps.
+          mka vbmeta -j${JOB_COUNT} 2>&1 | tee -a /tmp/build.log
           ccache -s
 
       - name: Locate and verify output
@@ -167,6 +176,25 @@ jobs:
           echo "BUILD_TIME=$(date +%H%M)" >> $GITHUB_ENV
           echo "MD5_IMG=$(md5sum ${IMG} | cut -d ' ' -f 1)" >> $GITHUB_ENV
           ls -la ${IMG}
+          # The vbmeta image is required on the device to disable AVB
+          # verification (see Build TWRP step). Fail loudly if missing.
+          VBMETA=out/target/product/${{ env.DEVICE_NAME }}/vbmeta.img
+          if [ ! -f "${VBMETA}" ]; then
+            echo "::error::vbmeta.img not found (required to disable AVB on device)"
+            ls -la out/target/product/${{ env.DEVICE_NAME }}/ 2>&1 | tail -20
+            tail -30 /tmp/build.log
+            exit 1
+          fi
+          # Sanity: the shipped vbmeta MUST be flags=3 (AVB verification
+          # disabled). Parse AvbVBMetaImageHeader directly (flags is u32 BE
+          # @ offset 148) to avoid an avbtool runtime dependency.
+          if ! python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(160); sys.exit(0 if (d[:4]==b'AVB0' and struct.unpack('>I',d[148:152])[0]==3) else 1)" "${VBMETA}"; then
+            echo "::error::vbmeta is not flags-3 (AVB verification not disabled) - refusing to release a non-booting image"
+            exit 1
+          fi
+          echo "OK: vbmeta flags=3 (AVB verification disabled)"
+          echo "MD5_VBMETA=$(md5sum ${VBMETA} | cut -d ' ' -f 1)" >> $GITHUB_ENV
+          ls -la ${VBMETA}
 
       # Regression guard: the Lenovo UEFI bootloader (same family as the
       # working TB321FU) refuses to boot recovery images whose header cmdline
@@ -195,6 +223,7 @@ jobs:
         with:
           files: |
             workspace/out/target/product/${{ env.DEVICE_NAME }}/${{ env.FOUND }}
+            workspace/out/target/product/${{ env.DEVICE_NAME }}/vbmeta.img
           name: "TWRP for ${{ env.DEVICE_NAME }} (${{ env.BUILD_DATE }})"
           tag_name: "twrp-${{ env.BUILD_DATE }}-${{ env.BUILD_TIME }}"
           body: |
@@ -203,10 +232,22 @@ jobs:
             **Baseline:** twrp-12.1 minimal manifest (SM6225 bengal)
             **Kernel:** GKI 5.15.167 (stock KMI compatible)
 
-            **Flash to recovery partition (both slots):**
+            > ⚠️ **MANDATORY vbmeta flash.** This device's stock `vbmeta_a/b`
+            > pins a Hash descriptor on the recovery partition; a custom TWRP
+            > recovery can never match that digest, so the bootloader rejects
+            > it and falls back to fastboot. Flash the included `vbmeta.img`
+            > (AVB verification disabled, flags 3) to the vbmeta partition
+            > **before** recovery, otherwise TWRP will not boot. This disables
+            > Verified Boot device-wide (orange state) - the standard tradeoff
+            > for custom recovery on AVB-enforcing devices.
+
+            **Flash order (both slots):**
             ```
+            fastboot flash vbmeta_a vbmeta.img
+            fastboot flash vbmeta_b vbmeta.img
             fastboot flash recovery_a ${{ env.FOUND }}
             fastboot flash recovery_b ${{ env.FOUND }}
             ```
 
-            **MD5:** `${{ env.MD5_IMG }}`
+            **MD5 (recovery):** `${{ env.MD5_IMG }}`
+            **MD5 (vbmeta):** `${{ env.MD5_VBMETA }}`

@@ -138,10 +138,19 @@ VENDOR_SECURITY_PATCH := $(PLATFORM_SECURITY_PATCH)
 PLATFORM_VERSION := 99
 PLATFORM_VERSION_LAST_STABLE = $(PLATFORM_VERSION)
 
-# Verified Boot - recovery partition signed like TB321FU (testkey, low
-# rollback index). Stock TB331FC recovery_a.img has no AVB signature and no
-# os_patch_level; a large patch level (from BOOT_SECURITY_PATCH) triggers
-# bootloader AVB rollback protection -> boots back to fastboot.
+# Verified Boot - The stock vbmeta_a.img contains a Hash descriptor for the
+# recovery partition (stock digest 6e345d34..., image 14585856). The
+# bootloader verifies the recovery image hash on every boot, so a custom
+# TWRP recovery (different hash) is rejected and falls back to fastboot -
+# this is the real boot blocker (NOT the cmdline or the 2099-12 patch level;
+# the working TB321FU uses the identical security-patch/version values).
+# The stock vbmeta is testkey-signed (pubkey sha1 2597c218...), the same key
+# this tree signs with, so the device trusts our signatures.
+#
+# Fix: --flags 3 makes the build's vbmeta AVB-verification-DISABLED and
+# testkey-signed (= device-trusted). Flash it to the vbmeta partition before
+# recovery (shipped in the release + documented in flash steps) to disable
+# the stock recovery-hash enforcement so the custom recovery boots.
 BOARD_AVB_ENABLE := true
 BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS += --flags 3
 BOARD_AVB_RECOVERY_KEY_PATH := external/avb/test/data/testkey_rsa4096.pem

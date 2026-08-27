@@ -84,14 +84,23 @@
 ## 四、待办 / 当前状态
 
 - [x] 设备树 + CI 全链路修复(16 轮)
-- [x] 无法启动根因定位与修复(2026-08-15, f924b00 起)
-  - 实测 20260814 发布镜像 header:`command line args: buildvariant=eng`(kernel_size=0、os_version=99.0.0 均正确)
-  - Lenovo UEFI bootloader(与 TB321FU 同族)要求 recovery header cmdline 为空,非空 → 拒绝启动、退回 fastboot
-  - `TARGET_PREBUILT_KERNEL := /dev/null` 只能清空 kernel,清不掉 cmdline(build/make 在 `INTERNAL_KERNEL_CMDLINE` 无条件追加 `buildvariant=$(TARGET_BUILD_VARIANT)`)
-  - 修复:`BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true` 同时移除 kernel 与 `--cmdline`(core/Makefile 中 `INTERNAL_RECOVERYIMAGE_ARGS` 的逻辑),镜像布局对齐 stock recovery_a.img
-  - CI 增加 header 自检步骤(空 cmdline / kernel_size=0 / os_version=99.0.0),防止回归
-- [ ] 用修复后的 commit 重新构建并发布 Release(最新 Release 20260814 仍为坏镜像)
-- [ ] 刷机实测:fastboot flash recovery_a/b recovery.img
+- [x] cmdline/header 对齐 stock(2026-08-15, f924b00 → 70e2a9f)
+  - 20260814 镜像 header:`command line args: buildvariant=eng`(kernel_size=0、os_version=99.0.0 正确)
+  - `BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true` 同时移除 kernel 与 build/make 追加的 `buildvariant=eng` cmdline,header 布局对齐 stock
+  - CI header 自检(空 cmdline / kernel_size=0 / os_version=99.0.0)防回归
+  - ⚠️ 此修复是必要卫生项,但**不是无法启动的根因** —— 20260824(cmdline 已空)刷机仍回 fastboot,证明 cmdline 非阻断点
+- [x] 真正根因定位:stock vbmeta 强制校验 recovery(2026-08-27)
+  - `vbmeta_a.img` 含 recovery 的 Hash descriptor:`Image Size 14585856 / Digest 6e345d34… / Flags 0`(校验开启)
+  - 自定义 TWRP recovery 哈希 `e9bf7181…` 永不等于 stock digest → bootloader 拒绝 → 回 fastboot(用户确认:直接回 fastboot)
+  - 对比已知能启动的 TB321FU:AVB/security 配置(2099-12-31、testkey、--flags 3、rollback 1)与本项目几乎一致,但 TB321FU 只需"解锁+刷 recovery"即可启动 → 其 stock vbmeta 不强制 recovery 校验或 bootloader 解锁后宽容;TB331FC 这台则强制
+  - 推翻先前诊断:"大 patch level → AVB rollback"不成立(TB321FU 同用 2099-12-31 却能启动);2099/testkey/rollback 均非阻断点
+  - stock vbmeta 与本树都用 testkey 签名(pubkey sha1 `2597c218…` 相同),设备信任我们的签名
+- [x] 修复:发布并刷入 flags-3 vbmeta 关闭 AVB 校验
+  - CI 增加 `mka vbmeta` 构建独立 vbmeta 分区镜像(`--flags 3` = 校验关闭,testkey 签名 = 设备可信)
+  - release 同时发布 `vbmeta.img`,刷机顺序改为先 `fastboot flash vbmeta_a/b vbmeta.img` 再刷 recovery
+  - CI 增加 vbmeta 自检(magic=AVB0 且 flags@148=3),防止发布无法启动的镜像
+  - ⚠️ 副作用:刷 flags-3 vbmeta 会整机关闭 Verified Boot(orange 态),这是 AVB-enforcing 设备跑自定义 recovery 的标准代价
+- [ ] 刷机实测:先刷 vbmeta_a/b,再刷 recovery_a/b
 - [ ] 验证触摸/解密/ADB 等功能
 
 ## 五、参考仓库

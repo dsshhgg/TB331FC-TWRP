@@ -45,9 +45,15 @@ downloads the GKI kernel from `yxyyds666/TB331FC-Kernel`.
 
 ## Flash
 
-The device has a dedicated recovery partition (A/B):
+The device has a dedicated recovery partition (A/B). The stock `vbmeta_a/b`
+pins a Hash descriptor on the recovery partition, so a custom TWRP recovery
+is rejected by the bootloader (falls back to fastboot) until you flash the
+AVB-disabled `vbmeta.img` (flags 3, built alongside recovery) to the vbmeta
+partition **first**. This disables Verified Boot device-wide (orange state).
 
 ```shell
+fastboot flash vbmeta_a vbmeta.img
+fastboot flash vbmeta_b vbmeta.img
 fastboot flash recovery_a recovery.img
 fastboot flash recovery_b recovery.img
 ```
