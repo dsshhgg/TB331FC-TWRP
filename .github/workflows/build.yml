@@ -143,15 +143,25 @@ jobs:
             echo "recovery.img missing, trying bootimage"
             mka bootimage -j${JOB_COUNT} 2>&1 | tee -a /tmp/build.log
           fi
-          # Build the standalone vbmeta partition image. BOARD_AVB_ENABLE +
-          # --flags 3 yields an AVB-verification-DISABLED, testkey-signed
-          # vbmeta (the device's stock vbmeta is testkey-signed too, pubkey
-          # sha1 2597c218...). The stock vbmeta pins a Hash descriptor on the
-          # recovery partition (stock digest) that a custom TWRP recovery can
-          # never satisfy -> bootloader rejects it and falls back to fastboot.
-          # Flashing this flags-3 vbmeta disables that enforcement so the
-          # custom recovery boots. Shipped in the release; see flash steps.
-          mka vbmeta -j${JOB_COUNT} 2>&1 | tee -a /tmp/build.log
+          # Generate the standalone vbmeta partition image with avbtool (the
+          # twrp-12.1 minimal manifest has NO `vbmeta` make target - `mka
+          # vbmeta` fails with "ninja: unknown target" - so it is generated
+          # directly from external/avb/avbtool instead). --flags 3 yields an
+          # AVB-verification-DISABLED vbmeta; signed with the AOSP testkey
+          # (external/avb/test/data/testkey_rsa4096.pem) whose public key
+          # sha1 2597c218... matches the device's stock vbmeta exactly, so
+          # the bootloader trusts it. The stock vbmeta pins a Hash descriptor
+          # on the recovery partition (stock digest) that a custom TWRP
+          # recovery can never satisfy -> bootloader rejects it and falls
+          # back to fastboot. Flashing this flags-3 vbmeta disables that
+          # enforcement so the custom recovery boots. Shipped in the release;
+          # see flash steps.
+          python3 external/avb/avbtool make_vbmeta_image \
+            --flags 3 \
+            --algorithm SHA256_RSA4096 \
+            --key external/avb/test/data/testkey_rsa4096.pem \
+            --padding_size 4096 \
+            --output out/target/product/${{ env.DEVICE_NAME }}/vbmeta.img
           ccache -s
 
       - name: Locate and verify output
@@ -187,8 +197,10 @@ jobs:
           fi
           # Sanity: the shipped vbmeta MUST be flags=3 (AVB verification
           # disabled). Parse AvbVBMetaImageHeader directly (flags is u32 BE
-          # @ offset 148) to avoid an avbtool runtime dependency.
-          if ! python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(160); sys.exit(0 if (d[:4]==b'AVB0' and struct.unpack('>I',d[148:152])[0]==3) else 1)" "${VBMETA}"; then
+          # @ offset 120, after magic+versions+block sizes+algorithm+
+          # hash/sig/pubkey/pkmeta/descriptors+rollback_index) to avoid an
+          # avbtool runtime dependency.
+          if ! python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(160); sys.exit(0 if (d[:4]==b'AVB0' and struct.unpack('>I',d[120:124])[0]==3) else 1)" "${VBMETA}"; then
             echo "::error::vbmeta is not flags-3 (AVB verification not disabled) - refusing to release a non-booting image"
             exit 1
           fi
