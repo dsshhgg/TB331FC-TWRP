@@ -202,17 +202,7 @@ jobs:
           # (header 256B; flags u32 BE @120; auth block follows header, then
           # aux block with the public key @pk_offset) to avoid an avbtool
           # runtime dependency.
-          if ! python3 -c "
-import struct, hashlib, sys
-d = open(sys.argv[1], 'rb').read()
-hdr = d[:256]
-auth_bs, aux_bs = struct.unpack('>QQ', hdr[12:28])
-pk_off, pk_size = struct.unpack('>QQ', hdr[64:80])
-aux = d[256+auth_bs : 256+auth_bs+aux_bs]
-flags = struct.unpack('>I', hdr[120:124])[0]
-pk_sha1 = hashlib.sha1(aux[pk_off:pk_off+pk_size]).hexdigest()
-sys.exit(0 if (hdr[:4]==b'AVB0' and flags==3 and pk_sha1=='2597c218aae470a130f61162feaae70afd97f011') else 1)
-" "${VBMETA}"; then
+          if ! python3 -c "import struct,hashlib,sys; d=open(sys.argv[1],'rb').read(); hdr=d[:256]; auth_bs,aux_bs=struct.unpack('>QQ',hdr[12:28]); pk_off,pk_size=struct.unpack('>QQ',hdr[64:80]); aux=d[256+auth_bs:256+auth_bs+aux_bs]; flags=struct.unpack('>I',hdr[120:124])[0]; pk_sha1=hashlib.sha1(aux[pk_off:pk_off+pk_size]).hexdigest(); sys.exit(0 if (hdr[:4]==b'AVB0' and flags==3 and pk_sha1=='2597c218aae470a130f61162feaae70afd97f011') else 1)" "${VBMETA}"; then
             echo "::error::vbmeta not flags=3 AND testkey-signed (pubkey 2597c218...) - refusing to release a non-booting image"
             exit 1
           fi
