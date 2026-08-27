@@ -98,7 +98,8 @@
 - [x] 修复:发布并刷入 flags-3 vbmeta 关闭 AVB 校验
   - twrp-12.1 minimal manifest **没有 `vbmeta` make target**(`mka vbmeta` 报 `ninja: unknown target 'vbmeta'` → CI 失败),改用 `external/avb/avbtool make_vbmeta_image --flags 3 --algorithm SHA256_RSA4096 --key external/avb/test/data/testkey_rsa4096.pem` 直接生成独立 vbmeta 分区镜像(`--flags 3` = 校验关闭;testkey 公钥 sha1 `2597c218…` 与 stock vbmeta 完全一致 → 设备信任)
   - release 同时发布 `vbmeta.img`,刷机顺序改为先 `fastboot flash vbmeta_a/b vbmeta.img` 再刷 recovery
-  - CI 增加 vbmeta 自检(magic=AVB0 且 flags@120=3),防止发布无法启动的镜像;⚠️ flags 在 `AvbVBMetaImageHeader` 中的偏移是 **120**(avbtool FORMAT_STRING 权威验证)而非早期误写的 148
+  - CI 增加 vbmeta 自检(magic=AVB0、flags@120=3、且签名公钥 sha1=`2597c218…` 与 stock 一致)防止发布刷不进的镜像;⚠️ flags 在 `AvbVBMetaImageHeader` 中的偏移是 **120**(avbtool FORMAT_STRING 权威验证)而非早期误写的 148
+  - vbmeta.img 用 `--padding_size 65536` 对齐 stock 分区大小(64KB),避免 fastboot 以小镜像刷大分区被拒
   - ⚠️ 副作用:刷 flags-3 vbmeta 会整机关闭 Verified Boot(orange 态),这是 AVB-enforcing 设备跑自定义 recovery 的标准代价
 - [ ] 刷机实测:先刷 vbmeta_a/b,再刷 recovery_a/b
 - [ ] 验证触摸/解密/ADB 等功能
