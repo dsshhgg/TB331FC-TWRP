@@ -52,3 +52,6 @@ fastboot flash recovery_b recovery.img
 - Kernel: [yxyyds666/TB331FC-Kernel](https://github.com/yxyyds666/TB331FC-Kernel) (GKI 5.15, stock KMI compatible)
 - Stock images: `dtbo_a.img`, `init_boot_a.img`, `recovery_a.img` (device dump)
 - More details: [`device/lenovo/TB331FC/README.md`](device/lenovo/TB331FC/README.md)
+
+
+<!-- ci trigger 2026-09-27T01:45:14.7717050+08:00 -->
