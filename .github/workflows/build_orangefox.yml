@@ -41,7 +41,7 @@ jobs:
 
       - name: Sync OrangeFox on TWRP 12.1 base
         run: |
-          mkdir -p /mnt/work && ln -sfn /mnt/work work
+          mkdir -p $HOME/work && ln -sfn $HOME/work work
           cd work
           repo init -u ${{ env.MANIFEST }} -b ${{ env.MANIFEST_BRANCH }} --depth=1 --groups=all,-notdefault,-device,-darwin,-x86,-mips
           repo sync -j$(nproc) --force-sync --no-tags --no-clone-bundle
@@ -100,4 +100,5 @@ jobs:
         with:
           tag_name: orangefox-${{ github.run_number }}
           files: dist/*
+
 
