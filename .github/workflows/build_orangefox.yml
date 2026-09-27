@@ -57,7 +57,7 @@ jobs:
           cd work
           rm -rf ${{ env.DT_PATH }}
           mkdir -p ${{ env.DT_PATH }}
-          cp -r ${{ github.workspace }}/${{ env.DT_PATH }}/* ${{ env.DT_PATH }}/
+          rsync -a --delete ${{ github.workspace }}/${{ env.DT_PATH }}/ ${{ env.DT_PATH }}/
           # kernel from official release
           REL=$(curl -sL "https://api.github.com/repos/yxyyds666/TB331FC-Kernel/releases/latest" | grep -oP '"browser_download_url": "\K[^"]*boot-main\.img' | head -1)
           if [ -n "$REL" ]; then
@@ -87,6 +87,7 @@ jobs:
           cp out/target/product/${{ env.DEVICE }}/recovery.img dist/ 2>/dev/null || true
           cp out/target/product/${{ env.DEVICE }}/OrangeFox*.zip dist/ 2>/dev/null || true
           cp vbmeta.img dist/ 2>/dev/null || true
+          # copy vendor modules into recovery ramdisk if needed
           ls -la dist/
 
       - name: Upload
@@ -101,6 +102,7 @@ jobs:
         with:
           tag_name: orangefox-${{ github.run_number }}
           files: dist/*
+
 
 
 
