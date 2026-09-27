@@ -1,4 +1,4 @@
-﻿#
+#
 # OrangeFox product for Lenovo TB331FC
 #
 $(call inherit-product, device/lenovo/TB331FC/device.mk)
