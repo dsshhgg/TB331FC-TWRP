@@ -1,20 +1,18 @@
 name: Build OrangeFox for TB331FC
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
+      - 'device/lenovo/TB331FC/**'
       - '.github/workflows/build_orangefox.yml'
-      - 'device/**'
-  workflow_dispatch:
 
 env:
   MANIFEST: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git
   MANIFEST_BRANCH: twrp-12.1
   DEVICE: TB331FC
   DT_PATH: device/lenovo/TB331FC
-  TARGET: recoveryimage
-  TZ: Asia/Shanghai
 
 jobs:
   build:
@@ -22,87 +20,80 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Free disk
+      - name: Free disk + swap
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
-          sudo fallocate -l 12G /mnt/swapfile && sudo chmod 600 /mnt/swapfile
+          sudo fallocate -l 12G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
 
-      - name: Setup
+      - name: Setup deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl git wget python3 rsync flex bison libssl-dev libncurses5-dev libxml2-utils lzop pngcrush squashfs-tools
+          sudo apt-get install -y bc build-essential zip curl git wget python3 rsync flex bison libssl-dev libncurses5-dev
           sudo curl -sL -o /usr/local/bin/repo https://storage.googleapis.com/git-repo-downloads/repo
           sudo chmod a+rx /usr/local/bin/repo
 
-      - name: Sync OrangeFox on TWRP 12.1 base
+      - name: Sync source + OrangeFox
         run: |
-          mkdir -p $HOME/work && ln -sfn $HOME/work work
+          mkdir -p "$HOME/work"
+          ln -sfn "$HOME/work" work
           cd work
-          repo init -u ${{ env.MANIFEST }} -b ${{ env.MANIFEST_BRANCH }} --depth=1 --groups=all,-notdefault,-device,-darwin,-x86,-mips
-          repo sync -j$(nproc) --force-sync --no-tags --no-clone-bundle
-          # OrangeFox overlay (same as Recovery-Builder-NoKernel recipe)
+          repo init -u "$MANIFEST" -b "$MANIFEST_BRANCH" --depth=1 --groups=all,-notdefault,-device,-darwin,-x86,-mips
+          repo sync -j"$(nproc)" --force-sync --no-tags --no-clone-bundle
           rm -rf bootable/recovery vendor/recovery
-          git clone --depth=1 -b fox_12.1 https://gitlab.com/OrangeFox/bootable/Recovery.git bootable/recovery || \
-            git clone --depth=1 -b fox_12.1 https://github.com/OrangeFoxRecovery/bootable_Recovery.git bootable/recovery
-          git clone --depth=1 -b fox_12.1 https://gitlab.com/OrangeFox/vendor/recovery.git vendor/recovery || \
-            git clone --depth=1 -b fox_12.1 https://github.com/OrangeFoxRecovery/vendor_recovery.git vendor/recovery
+          git clone --depth=1 -b fox_12.1 https://gitlab.com/OrangeFox/bootable/Recovery.git bootable/recovery
+          git clone --depth=1 -b fox_12.1 https://gitlab.com/OrangeFox/vendor/recovery.git vendor/recovery
+          test -f bootable/recovery/Android.bp
+          test -d vendor/recovery
 
       - name: Device tree
         run: |
           cd work
-          rm -rf ${{ env.DT_PATH }}
-          mkdir -p ${{ env.DT_PATH }}
-          rsync -a --delete ${{ github.workspace }}/${{ env.DT_PATH }}/ ${{ env.DT_PATH }}/
-          # kernel from official release
+          rm -rf "${{ env.DT_PATH }}"
+          mkdir -p "$(dirname "${{ env.DT_PATH }}")"
+          cp -a "${{ github.workspace }}/${{ env.DT_PATH }}" "${{ env.DT_PATH }}"
           REL=$(curl -sL "https://api.github.com/repos/yxyyds666/TB331FC-Kernel/releases/latest" | grep -oP '"browser_download_url": "\K[^"]*boot-main\.img' | head -1)
+          echo "kernel=$REL"
           if [ -n "$REL" ]; then
             curl -sL -o /tmp/boot-main.img "$REL"
             curl -sL -o /tmp/unpack_bootimg.py https://raw.githubusercontent.com/LineageOS/android_system_tools_mkbootimg/lineage-22.1/unpack_bootimg.py
             python3 /tmp/unpack_bootimg.py --boot_img /tmp/boot-main.img --out /tmp/bx
-            [ -f /tmp/bx/kernel ] && cp /tmp/bx/kernel ${{ env.DT_PATH }}/prebuilt/kernel
+            mkdir -p "${{ env.DT_PATH }}/prebuilt"
+            cp /tmp/bx/kernel "${{ env.DT_PATH }}/prebuilt/kernel"
           fi
+          find "${{ env.DT_PATH }}" -type f | head -30
 
-      - name: Build OrangeFox
+      - name: Build OrangeFox recoveryimage
         run: |
           cd work
+          set -o pipefail
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh
           lunch omni_${{ env.DEVICE }}-eng
-          mka ${{ env.TARGET }} -j2 2>&1 | tee /tmp/build.log
+          mka recoveryimage -j2 2>&1 | tee /tmp/build.log
+          ls -la out/target/product/${{ env.DEVICE }}/
+          test -s out/target/product/${{ env.DEVICE }}/recovery.img
 
       - name: Package
         run: |
           cd work
-          ls -la out/target/product/${{ env.DEVICE }}/ || true
-          # vbmeta flags 3
-          if [ -f external/avb/avbtool.py ]; then
-            python3 external/avb/avbtool.py make_vbmeta_image --flags 3 --padding_size 65536 --output vbmeta.img || true
-          fi
           mkdir -p dist
-          cp out/target/product/${{ env.DEVICE }}/recovery.img dist/ 2>/dev/null || true
-          cp out/target/product/${{ env.DEVICE }}/OrangeFox*.zip dist/ 2>/dev/null || true
-          cp vbmeta.img dist/ 2>/dev/null || true
-          # copy vendor modules into recovery ramdisk if needed
+          cp -f out/target/product/${{ env.DEVICE }}/recovery.img dist/recovery.img
+          test -s dist/recovery.img
           ls -la dist/
 
-      - name: Upload
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: OrangeFox-TB331FC
-          path: dist/
+          path: dist/recovery.img
 
       - name: Release
-        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: orangefox-${{ github.run_number }}
-          files: dist/*
-
-
-
-
+          files: dist/recovery.img
+          fail_on_unmatched_files: true
