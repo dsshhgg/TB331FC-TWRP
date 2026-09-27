@@ -71,3 +71,4 @@ PRODUCT_BUILD_SUPER_PARTITION := false
 # Soong namespaces
 PRODUCT_SOONG_NAMESPACES += \
     $(DEVICE_PATH)
+
