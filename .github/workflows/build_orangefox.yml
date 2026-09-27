@@ -1,4 +1,4 @@
-﻿name: Build OrangeFox for TB331FC
+name: Build OrangeFox for TB331FC
 
 on:
   push:
@@ -55,6 +55,7 @@ jobs:
       - name: Device tree
         run: |
           cd work
+          rm -rf ${{ env.DT_PATH }}
           mkdir -p ${{ env.DT_PATH }}
           cp -r ${{ github.workspace }}/${{ env.DT_PATH }}/* ${{ env.DT_PATH }}/
           # kernel from official release
@@ -100,5 +101,6 @@ jobs:
         with:
           tag_name: orangefox-${{ github.run_number }}
           files: dist/*
+
 
 
