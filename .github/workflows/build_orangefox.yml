@@ -1,0 +1,121 @@
+﻿name: Build OrangeFox for TB331FC
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  MANIFEST_URL: https://gitlab.com/OrangeFox/recovery.git
+  MANIFEST_BRANCH: fox_12.1
+  KERNEL_REPO: yxyyds666/TB331FC-Kernel
+  DEVICE_NAME: TB331FC
+  DEVICE_PATH: device/lenovo/TB331FC
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout device tree
+        uses: actions/checkout@v4
+
+      - name: Relocate build dir to /mnt and disable OOM killer
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          sudo systemctl mask --now systemd-oomd.service systemd-oomd.socket || true
+          sudo fallocate -l 12G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf imagemagick liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev lib32z1-dev lib32ncurses-dev lib32readline-dev libc6-dev-i386 lib32gcc-s1 lib32stdc++6 python3 python3-pip unzip
+
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
+
+      - name: Set up ccache
+        run: |
+          echo "USE_CCACHE=1" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+          ccache -M 6G
+          ccache -o compression=true
+
+      - name: Initialize repo (OrangeFox)
+        run: |
+          sudo mkdir -p /mnt/workspace
+          sudo chown "$(id -u):$(id -g)" /mnt/workspace
+          ln -sfn /mnt/workspace workspace
+          cd workspace
+          git config --global user.name "OF Builder"
+          git config --global user.email "of@localhost"
+          repo init --depth=1 -u ${{ env.MANIFEST_URL }} -b ${{ env.MANIFEST_BRANCH }}
+
+      - name: Sync source
+        run: |
+          cd workspace
+          repo sync -j$(nproc --all) --force-sync --no-tags --no-clone-bundle
+
+      - name: Copy device tree
+        run: |
+          mkdir -p workspace/${{ env.DEVICE_PATH }}
+          cp -r ${{ env.DEVICE_PATH }}/* workspace/${{ env.DEVICE_PATH }}/
+
+      - name: Download kernel from TB331FC-Kernel
+        run: |
+          RELEASE_URL=$(curl -sL "https://api.github.com/repos/${{ env.KERNEL_REPO }}/releases/latest" | grep -oP '"browser_download_url": "\K[^"]*boot-main\.img' | head -1)
+          if [ -n "$RELEASE_URL" ]; then
+            curl -L -o /tmp/boot-main.img "$RELEASE_URL"
+            mkdir -p /tmp/boottools
+            curl -sL -o /tmp/boottools/unpack_bootimg.py https://raw.githubusercontent.com/LineageOS/android_system_tools_mkbootimg/lineage-22.1/unpack_bootimg.py
+            chmod +x /tmp/boottools/unpack_bootimg.py
+            python3 /tmp/boottools/unpack_bootimg.py --boot_img /tmp/boot-main.img --out /tmp/boot_extract
+            if [ -f /tmp/boot_extract/kernel ]; then
+              cp /tmp/boot_extract/kernel workspace/${{ env.DEVICE_PATH }}/prebuilt/kernel
+            fi
+          fi
+
+      - name: Build OrangeFox
+        run: |
+          set -o pipefail
+          cd workspace
+          export ALLOW_MISSING_DEPENDENCIES=true
+          source build/envsetup.sh
+          lunch omni_${{ env.DEVICE_NAME }}-eng || lunch twrp_${{ env.DEVICE_NAME }}-eng
+          mka recoveryimage -j2 2>&1 | tee /tmp/build.log
+          ls -la out/target/product/${{ env.DEVICE_NAME }}/recovery.img || mka bootimage -j2 2>&1 | tee -a /tmp/build.log
+
+      - name: Make vbmeta
+        run: |
+          cd workspace
+          if [ -f external/avb/avbtool.py ]; then
+            python3 external/avb/avbtool.py make_vbmeta_image --flags 3 --padding_size 65536 --output vbmeta.img
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: orangefox-tb331fc
+          path: |
+            out/target/product/TB331FC/recovery.img
+            workspace/vbmeta.img
+
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: orangefox-$(date +%Y%m%d-%H%M)
+          name: OrangeFox for TB331FC
+          files: |
+            out/target/product/TB331FC/recovery.img
+            vbmeta.img
+          generate_release_notes: true
