@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  MANIFEST_URL: https://gitlab.com/OrangeFox/recovery/manifest.git
+  MANIFEST_URL: https://github.com/OrangeFoxRecovery/manifest.git
   MANIFEST_BRANCH: fox_12.1
   KERNEL_REPO: yxyyds666/TB331FC-Kernel
   DEVICE_NAME: TB331FC
@@ -119,4 +119,5 @@ jobs:
             out/target/product/TB331FC/recovery.img
             vbmeta.img
           generate_release_notes: true
+
 
