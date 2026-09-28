@@ -33,11 +33,11 @@ FOX_AB_DEVICE := 1
 OF_AB_DEVICE_WITH_RECOVERY_PARTITION := 1
 OF_DYNAMIC_PARTITIONS := true
 
-FOX_VERSION := R12.1
-FOX_BUILD_TYPE := Stable
 
 # 8GB device: do not enable large swap
 FOX_USE_SWAP := 0
+# FOX_VERSION is obsolete in this OF tree; use FOX_MAINTAINER_PATCH_VERSION if needed
+# FOX_MAINTAINER_PATCH_VERSION := 0
 
 # ---------------------------------------------------------------------------
 # A/B + OTA
