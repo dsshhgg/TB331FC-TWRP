@@ -158,7 +158,7 @@ BOARD_AVB_RECOVERY_ALGORITHM := SHA256_RSA4096
 BOARD_AVB_RECOVERY_ROLLBACK_INDEX := 1
 BOARD_AVB_RECOVERY_ROLLBACK_INDEX_LOCATION := 1
 
-# OrangeFox
+# ========== OrangeFox ==========
 OF_USE_TWRP_SAR_DETECT := true
 OF_DISABLE_DM_VERITY := true
 OF_DISABLE_FORCED_ENCRYPTION := true
@@ -168,4 +168,19 @@ OF_STATUS_INDICATOR := true
 OF_ALLOW_DISABLE_NAVBAR := true
 OF_QUICK_BACKUP_LIST := "boot"
 FOX_USE_SPECIFIC_MAGISK_ZIP := false
+
+# ========== A/B device ==========
+# Mark as A/B device (new name; old OF_AB_DEVICE still recognized)
+FOX_AB_DEVICE := 1
+
+# Critical: A/B with a dedicated recovery partition (not ramdisk-in-boot).
+# Without this, the OF installer writes recovery into the boot partition.
+OF_AB_DEVICE_WITH_RECOVERY_PARTITION := 1
+
+# ========== Dynamic partitions ==========
+OF_DYNAMIC_PARTITIONS := true
+
+# Recovery repack
+TW_INCLUDE_REPACKTOOLS := true
+
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab
