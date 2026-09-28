@@ -79,25 +79,35 @@ jobs:
           chmod +x ${{ env.FOX_DIR }}/device/lenovo/${{ env.DEVICE_NAME }}/vendorsetup.sh
 
       - name: Build OrangeFox
+        shell: bash
         run: |
+          set +e
           cd ${{ env.FOX_DIR }}
           export CCACHE_DIR=/home/runner/.ccache
           export USE_CCACHE=1
           export CCACHE_EXEC=$(which ccache)
-          ccache -M 10G
-          source build/envsetup.sh
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER=1
           export LC_ALL=C
-          set +e
-          lunch fox_${{ env.DEVICE_NAME }}-eng 2>&1 | tee /tmp/lunch.log
-          LUNCH_RC=${PIPESTATUS[0]}
-          set -e
-          if [ "$LUNCH_RC" -ne 0 ]; then
-            echo "!! lunch failed rc=$LUNCH_RC"
-            exit $LUNCH_RC
-          fi
-          mka adbd recoveryimage -j$(nproc) 2>&1 | tee /tmp/build.log
+          ccache -M 10G
+          {
+            echo "==== source envsetup ===="
+            source build/envsetup.sh
+            echo "==== envsetup rc=$? ===="
+            echo "==== try lunch fox_TB331FC-eng ===="
+            lunch fox_${{ env.DEVICE_NAME }}-eng
+            echo "==== lunch fox rc=$? ===="
+            if ! get_build_var TARGET_PRODUCT >/tmp/target_product.txt 2>/dev/null; then
+              echo "TARGET_PRODUCT empty, fallback to twrp lunch"
+              lunch twrp_${{ env.DEVICE_NAME }}-eng
+              echo "==== lunch twrp rc=$? ===="
+            fi
+            echo "TARGET_PRODUCT=$(cat /tmp/target_product.txt 2>/dev/null)"
+            echo "==== mka ===="
+            mka adbd recoveryimage -j$(nproc)
+            echo "==== mka rc=$? ===="
+          } 2>&1 | tee /tmp/build.log
+          exit ${PIPESTATUS[0]}
 
       - name: Generate AVB-disabled vbmeta
         run: |
@@ -124,11 +134,15 @@ jobs:
           echo "产物: $FOUND"
 
       - name: Upload build log on failure
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fox-build-log
-          path: /tmp/build.log
+          path: |
+            /tmp/build.log
+            /tmp/lunch.log
+            /tmp/target_product.txt
+          if-no-files-found: warn
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
