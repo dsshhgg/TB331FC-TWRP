@@ -53,3 +53,25 @@ fastboot flash recovery_a recovery.img
 fastboot flash recovery_b recovery.img
 fastboot reboot recovery
 ```
+## 六、构建命令（编译时用）
+
+```bash
+cd ~/android/fox_12.1
+source build/envsetup.sh
+export ALLOW_MISSING_DEPENDENCIES=true
+export FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER=1
+export LC_ALL=C
+lunch fox_TB331FC-eng    # OrangeFox 用 fox_ 前缀，不是 twrp_
+mka adbd recoveryimage
+```
+
+git 代理卡顿时：
+
+```bash
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+# 同步源码务必浅克隆
+git clone --depth=1 ...
+```
+
+刷入后若卡 Logo / 黑屏回退 fastboot：不要反复刷，先 `fastboot boot recovery.img` 只启动测试。
