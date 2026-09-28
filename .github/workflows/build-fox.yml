@@ -105,7 +105,9 @@ jobs:
             echo "TARGET_PRODUCT=$(cat /tmp/target_product.txt 2>/dev/null)"
             echo "==== mka ===="
             mka adbd recoveryimage -j$(nproc)
-            echo "==== mka rc=$? ===="
+            MKA_RC=$?
+            echo "==== mka rc=$MKA_RC ===="
+            exit $MKA_RC
           } 2>&1 | tee /tmp/build.log
           exit ${PIPESTATUS[0]}
 
