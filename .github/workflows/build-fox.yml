@@ -89,7 +89,14 @@ jobs:
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER=1
           export LC_ALL=C
-          lunch fox_${{ env.DEVICE_NAME }}-eng
+          set +e
+          lunch fox_${{ env.DEVICE_NAME }}-eng 2>&1 | tee /tmp/lunch.log
+          LUNCH_RC=${PIPESTATUS[0]}
+          set -e
+          if [ "$LUNCH_RC" -ne 0 ]; then
+            echo "!! lunch failed rc=$LUNCH_RC"
+            exit $LUNCH_RC
+          fi
           mka adbd recoveryimage -j$(nproc) 2>&1 | tee /tmp/build.log
 
       - name: Generate AVB-disabled vbmeta
