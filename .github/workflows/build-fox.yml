@@ -83,19 +83,13 @@ jobs:
         run: |
           set +e
           cd ${{ env.FOX_DIR }}
-          # actions/cache restores as read-only; use a writable cache dir
-          mkdir -p /home/runner/ccache-writable
-          if [ -d /home/runner/.ccache ]; then
-            cp -a /home/runner/.ccache/. /home/runner/ccache-writable/ 2>/dev/null || true
-            chmod -R u+w /home/runner/ccache-writable || true
-          fi
-          export CCACHE_DIR=/home/runner/ccache-writable
-          export USE_CCACHE=1
-          export CCACHE_EXEC=$(which ccache)
+          # ccache on this runner hits "Read-only file system" under $HOME
+          # even with a fresh dir; disable it and compile without cache.
+          unset USE_CCACHE CCACHE_DIR CCACHE_EXEC
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER=1
           export LC_ALL=C
-          ccache -M 5G
+          df -h /home /tmp | tee /tmp/df.txt
           {
             echo "==== source envsetup ===="
             source build/envsetup.sh
