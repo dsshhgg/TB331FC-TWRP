@@ -48,7 +48,7 @@ jobs:
       - name: Restore ccache
         uses: actions/cache@v4
         with:
-          path: /home/runner/.ccache
+          path: /home/runner/ccache-writable
           key: fox-ccache-${{ env.DEVICE_NAME }}-${{ github.sha }}
           restore-keys: |
             fox-ccache-${{ env.DEVICE_NAME }}-
@@ -83,13 +83,19 @@ jobs:
         run: |
           set +e
           cd ${{ env.FOX_DIR }}
-          export CCACHE_DIR=/home/runner/.ccache
+          # actions/cache restores as read-only; use a writable cache dir
+          mkdir -p /home/runner/ccache-writable
+          if [ -d /home/runner/.ccache ]; then
+            cp -a /home/runner/.ccache/. /home/runner/ccache-writable/ 2>/dev/null || true
+            chmod -R u+w /home/runner/ccache-writable || true
+          fi
+          export CCACHE_DIR=/home/runner/ccache-writable
           export USE_CCACHE=1
           export CCACHE_EXEC=$(which ccache)
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER=1
           export LC_ALL=C
-          ccache -M 10G
+          ccache -M 5G
           {
             echo "==== source envsetup ===="
             source build/envsetup.sh
