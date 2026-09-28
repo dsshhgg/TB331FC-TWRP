@@ -60,6 +60,8 @@ jobs:
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           export PATH=~/bin:$PATH
+          git config --global --unset http.proxy 2>/dev/null || true
+          git config --global --unset https.proxy 2>/dev/null || true
           git clone --depth=1 https://gitlab.com/OrangeFox/sync.git ~/of_sync
           cd ~/of_sync
           chmod +x orangefox_sync.sh
@@ -87,7 +89,7 @@ jobs:
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER=1
           export LC_ALL=C
-          lunch twrp_${{ env.DEVICE_NAME }}-eng
+          lunch fox_${{ env.DEVICE_NAME }}-eng
           mka adbd recoveryimage -j$(nproc) 2>&1 | tee /tmp/build.log
 
       - name: Generate AVB-disabled vbmeta
