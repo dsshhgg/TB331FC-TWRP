@@ -36,6 +36,13 @@ OF_DYNAMIC_PARTITIONS := true
 
 # 8GB device: do not enable large swap
 FOX_USE_SWAP := 0
+
+# Slim: keep recovery.img under the 100MB partition after packing kernel
+FOX_DELETE_AROMAFM := 1
+FOX_DISABLE_APP_MANAGER := 1
+TW_NO_SCREEN_BLANK := true
+TW_INCLUDE_NTFS_3G := false
+TW_EXCLUDE_MTP := true
 # FOX_VERSION is obsolete in this OF tree; use FOX_MAINTAINER_PATCH_VERSION if needed
 # FOX_MAINTAINER_PATCH_VERSION := 0
 
