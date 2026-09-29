@@ -67,6 +67,15 @@ jobs:
           chmod +x orangefox_sync.sh
           ./orangefox_sync.sh --branch ${{ env.OF_BRANCH }} --path ${{ env.FOX_DIR }}
 
+      - name: Fetch stock kernel (release asset)
+        run: |
+          # 46MB raw kernel is too large for the Contents API; ship as release asset
+          mkdir -p devicetree/device/lenovo/${{ env.DEVICE_NAME }}/prebuilt
+          curl -L --retry 3 -o /tmp/stock-kernel.gz \
+            https://github.com/${{ github.repository }}/releases/download/fox-TB331FC-15/stock-kernel.gz
+          gzip -dc /tmp/stock-kernel.gz > devicetree/device/lenovo/${{ env.DEVICE_NAME }}/prebuilt/kernel
+          ls -la devicetree/device/lenovo/${{ env.DEVICE_NAME }}/prebuilt/kernel
+          rm -f /tmp/stock-kernel.gz
       - name: Install device tree into source tree
         run: |
           # 注意目录层级：仓库根目录是外层，设备树在 device/lenovo/TB331FC/
