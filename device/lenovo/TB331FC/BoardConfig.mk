@@ -36,7 +36,7 @@ BOARD_USES_QCOM_HARDWARE := true
 BOARD_KERNEL_PAGESIZE := 4096
 TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_HEADER_ARCH := arm64
-BOARD_KERNEL_IMAGE_NAME := Image
+BOARD_KERNEL_IMAGE_NAME := kernel
 # Canonical build/make variable name (same as working TB321FU tree)
 BOARD_BOOTIMG_HEADER_VERSION := 4
 BOARD_KERNEL_BASE := 0x00000000
@@ -46,15 +46,15 @@ BOARD_MKBOOTIMG_ARGS += --pagesize $(BOARD_KERNEL_PAGESIZE)
 
 # Stock recovery.img contains no kernel (GKI): bootloader loads it from boot.
 # Two knobs work together to reproduce the stock layout exactly:
-# 1. TARGET_PREBUILT_KERNEL := /dev/null satisfies TWRP's kernel.mk check
+# 1. TARGET_PREBUILT_KERNEL := device/lenovo/TB331FC/prebuilt/kernel satisfies TWRP's kernel.mk check
 #    (it errors with "NO KERNEL" when neither kernel source nor a prebuilt
 #    is defined) and produces an empty kernel payload, like stock.
-# 2. BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true makes build/make skip
+# 2. BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := false makes build/make skip
 #    the --cmdline argument entirely: TeamWin android-12.1 unconditionally
 #    appends "buildvariant=eng" to the recovery header cmdline otherwise,
 #    and the Lenovo bootloader falls back to fastboot on a non-empty cmdline.
-TARGET_PREBUILT_KERNEL := /dev/null
-BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true
+TARGET_PREBUILT_KERNEL := device/lenovo/TB331FC/prebuilt/kernel
+BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := false
 
 # Use LZ4 Ramdisk compression (stock uses LZ4)
 BOARD_RAMDISK_USE_LZ4 := true
