@@ -120,6 +120,31 @@ jobs:
           } 2>&1 | tee /tmp/build.log
           exit ${PIPESTATUS[0]}
 
+      - name: Strip recovery cmdline (Lenovo rejects non-empty cmdline)
+        run: |
+          # OF builder injects --cmdline "buildvariant=eng"; Lenovo bootloader
+          # falls back to fastboot on any non-empty cmdline. Zero it in-place.
+          python3 - <<'PY'
+          import os, struct
+          p = os.environ.get("FOX_DIR", "/home/runner/fox_12.1") + "/out/target/product/TB331FC"
+          names = [f for f in os.listdir(p) if f.startswith("OrangeFox-") and f.endswith(".img")]
+          names += ["recovery.img"]
+          for n in names:
+              fp = os.path.join(p, n)
+              if not os.path.isfile(fp):
+                  continue
+              with open(fp, "r+b") as f:
+                  hdr = bytearray(f.read(4096))
+                  if hdr[:8] != b"ANDROID!":
+                      continue
+                  k, r, osv, hs = struct.unpack_from("<4I", hdr, 8)
+                  cmd = bytes(hdr[44:44+1536]).split(b"\x00",1)[0]
+                  print(f"{n}: kernel={k} ramdisk={r} cmdline={cmd!r}")
+                  hdr[44:44+1536] = b"\x00" * 1536
+                  f.seek(0); f.write(hdr)
+                  print(f"  -> cmdline cleared")
+          PY
+          ls -la ${{ env.FOX_DIR }}/out/target/product/${{ env.DEVICE_NAME }}/OrangeFox-*.img
       - name: Generate AVB-disabled vbmeta
         run: |
           cd ${{ env.FOX_DIR }}
